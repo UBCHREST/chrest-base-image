@@ -91,7 +91,7 @@ jobs:
             docker buildx imagetools create -t $IMAGE_ID:latest --append $IMAGE_ID${{matrix.arch.id}}:${{github.run_id}}
           else
             echo "Creating new manifest"
-            docker buildx imagetools create -t $IMAGE_ID:${{github.run_id}}$IMAGE_ID${{matrix.arch.id}}:${{github.run_id}}
+            docker buildx imagetools create -t $IMAGE_ID:${{github.run_id}} $IMAGE_ID${{matrix.arch.id}}:${{github.run_id}}
             docker buildx imagetools create -t $IMAGE_ID:latest $IMAGE_ID${{matrix.arch.id}}:${{github.run_id}}
           fi
 
