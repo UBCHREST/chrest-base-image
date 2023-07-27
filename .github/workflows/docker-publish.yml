@@ -1,0 +1,98 @@
+name: Publish-Base-Image
+
+on:
+  schedule:
+    # Recompile at 00:15 UTC on Mondays
+    - cron: '15 0 * * 1'
+
+  push:
+    # Publish `main` as Docker `latest` image.
+    branches:
+      - main
+
+    # Publish `v1.2.3` tags as releases.
+    tags:
+      - v*
+
+  workflow_dispatch:
+  # Allow this event to be triggered in the github ui
+
+# only allow one test per PR to be run
+concurrency:
+  group: ${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: chrest-base-image
+
+jobs:
+  # Always build and push the latest package to github packages. 
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ { runson: ARM64, id: -arm64 }, { runson: ubuntu-latest, id: -amd64 } ]
+    runs-on: ${{ matrix.arch.runson }}
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: checkout code
+        uses: actions/checkout@v3
+
+      - name: Log into registry
+        run: echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+      - name: Build image 
+        run: |
+          # define the image id
+          IMAGE_ID=ghcr.io/${{ github.repository }}/$IMAGE_NAME${{matrix.arch.id}}
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          echo IMAGE_ID=$IMAGE_ID
+          echo VERSION=${{github.run_id}}
+          
+          # Build the image
+          docker buildx build .\
+            --provenance false \
+            --push \
+            --tag $IMAGE_ID:${{github.run_id}} \
+            --file Dockerfile 
+
+
+  # Push the latest tag if everything build and tested.  Note this must run on max-parallel=1
+  push-latest:
+    needs: [ build ]
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        arch: [ { runson: ARM64, id: -arm64 }, { runson: ubuntu-latest, id: -amd64 } ]
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - uses: actions/checkout@v3
+
+      - name: Log into registry
+        run: echo "${{ secrets.CR_PAT }}" | docker login ghcr.io -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+      - name: Build Manifest
+        run: |
+          # Define the base image id
+          IMAGE_ID=ghcr.io/${{ github.repository }}/$IMAGE_NAME
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+
+          # check if image exisits 
+          if docker manifest inspect $IMAGE_ID:${{github.run_id}} > /dev/null; then
+            echo "Appending manifest"
+            docker buildx imagetools create -t $IMAGE_ID:${{github.run_id}} --append $IMAGE_ID${{matrix.arch.id}}:${{github.run_id}}
+            docker buildx imagetools create -t $IMAGE_ID:latest --append $IMAGE_ID${{matrix.arch.id}}:${{github.run_id}}
+          else
+            echo "Creating new manifest"
+            docker buildx imagetools create -t $IMAGE_ID:${{github.run_id}}$IMAGE_ID${{matrix.arch.id}}:${{github.run_id}}
+            docker buildx imagetools create -t $IMAGE_ID:latest $IMAGE_ID${{matrix.arch.id}}:${{github.run_id}}
+          fi
+
+                    
