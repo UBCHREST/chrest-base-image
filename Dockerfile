@@ -1,5 +1,6 @@
 # ubuntu:latest points to the latest LTS
-FROM ubuntu:latest
+ARG BASE_IMAGE=ubuntu:latest
+FROM $BASE_IMAGE
 
 # Install dependencies
 ENV DEBIAN_FRONTEND=noninteractive
