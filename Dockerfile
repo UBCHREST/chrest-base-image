@@ -4,4 +4,4 @@ FROM $BASE_IMAGE
 
 # Install dependencies
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get -y install build-essential gfortran git cmake autoconf automake git python3 python3-distutils libtool clang libomp-dev clang-format pkg-config libpng-dev valgrind curl python-is-python3 gdb wget python3-dev python3-pip npm
+RUN apt-get update && apt-get -y install build-essential git cmake autoconf automake python3 python-is-python3 libtool clang clang-format pkg-config libpng-dev curl gdb
